@@ -132,6 +132,10 @@ def process_image_pair(ps_map, pg_map, levels, global_scale_factor):
 
     # Combine PG shape + scaled PS detail
     enhanced_map = low_freq_pg + high_freq_scaled
+
+    # Keep valid pixels in 0..65534 so no valid pixel can collide with the
+    # 65535 NoData/background value after the final uint16 conversion.
+    enhanced_map = np.clip(enhanced_map, 0, PG_BACKGROUND - 1)
     enhanced_map[~output_mask] = PG_BACKGROUND
 
     return enhanced_map
@@ -258,6 +262,13 @@ def main():
         # Load maps
         ps_map = load_depth_map(os.path.join(args.ps_folder, ps_f))
         pg_map = load_depth_map(os.path.join(args.pg_folder, pg_f))
+
+        # Skip mismatched pairs here too, otherwise the mask combination
+        # below raises an unhandled broadcasting error.
+        if ps_map.shape != pg_map.shape:
+            logging.error(f"Size mismatch (skipped in analysis): {ps_f} {ps_map.shape} "
+                          f"vs {pg_f} {pg_map.shape}")
+            continue
 
         # PG range
         pg_valid = pg_map[pg_map != PG_BACKGROUND]
